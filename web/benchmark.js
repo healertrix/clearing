@@ -213,13 +213,13 @@ function creators(d) {
 }
 
 function trust(d) {
-  const N = d.campaigns, W = 640, L = 150, R = 24, rowH = 32, rs = [{ name: `This run · ${N} campaigns`, old: { blown: d.totals.old.verdicts.blown / N }, new: { blown: d.totals.new.verdicts.blown / N } }, ...d.robust.map((r, i) => ({ name: `Other seed ${i + 1} · 100 campaigns`, ...r }))];
+  const N = d.campaigns, W = 640, L = 84, R = 24, rowH = 32, rs = [{ name: "This run", old: { blown: d.totals.old.verdicts.blown / N }, new: { blown: d.totals.new.verdicts.blown / N } }, ...d.robust.map((r, i) => ({ name: `Seed ${i + 2}`, ...r }))];
   const H = rs.length * rowH + 40, X = (v) => L + v * (W - L - R);
   const dumb = rs.map((r, i) => { const y = 28 + i * rowH; return `<text class="ax" x="${L - 12}" y="${y + 3}" text-anchor="end">${r.name}</text><line x1="${X(r.new.blown)}" x2="${X(r.old.blown)}" y1="${y}" y2="${y}" stroke="var(--line-2)" stroke-width="3"/>
     <circle cx="${X(r.old.blown)}" cy="${y}" r="7" fill="var(--old)"><title>Old way: ${pct(r.old.blown)} overspent</title></circle><text class="ax" x="${X(r.old.blown) + 12}" y="${y + 3}" style="fill:var(--old)">${pct(r.old.blown)}</text>
     <circle cx="${X(r.new.blown)}" cy="${y}" r="7" fill="var(--gold)"><title>Clearing: ${pct(r.new.blown)} overspent</title></circle>`; }).join("");
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((v) => `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="12" y2="${H - 22}"/><text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${pct(v)}</text>`).join("");
-  const seeds = card("Is this just one lucky run?", "Overspend rate, this run and five other random ones.",
+  const seeds = card("Is this just one lucky run?", `Overspend rate: this run (${N} campaigns) and five other seeds (100 campaigns each).`,
     `<svg class="chart" viewBox="0 0 ${W} ${H}">${ticks}${dumb}</svg>${OLD_NEW}`,
     `The old way overspent in ${pct(Math.min(...rs.map((r) => r.old.blown)))} to ${pct(Math.max(...rs.map((r) => r.old.blown)))} of campaigns across all six runs. Clearing overspent in none of them.`);
   const notes = { Perfect: "knows the exact price", Careful: "small errors", Typical: "this page's default", Careless: "big errors" };
@@ -278,32 +278,11 @@ function wireExplorer() {
   };
 }
 
-/* ---------- UNBIASED BANNER ---------- */
-function unbiasedBanner(d) {
-  if (d.mode !== "unbiased") return "";
-  return `<section class="unb"><h3>Unbiased mode: nothing here was hand-picked</h3>
-    <p>${d.campaigns} campaigns, each with its own random world. There are no market types, no 20% splits and no fixed price. Markets are labelled only after the fact, from what actually happened.</p>
-    <div class="two"><div><b>Drawn fresh for every campaign</b><ul>
-      <li>The true price per view: ₹5 to ₹100 per 1,000, log-uniform</li>
-      <li>Each creator size's typical views, spread and share of the crowd</li>
-      <li>How many creators turn up: lognormal around the expected crowd</li>
-      <li>How many viral surges (Poisson, average 1), which size group, how many posts, how strong</li>
-      <li>Single-post spikes (Poisson, average 2), 5× to 200×</li>
-      <li>The advertiser's skill, from perfect to careless, and his gut feel</li>
-      <li>How far Clearing's past data has drifted from today's market</li></ul></div>
-    <div><b>Still fixed, and why</b><ul>
-      <li>The four creator sizes and their rough order (from the brief)</li>
-      <li>The budget range, ₹20,000 to ₹2 crore</li>
-      <li>The rules: Clearing's rungs and price, the old ladder's payouts sized to spend the budget under the advertiser's own beliefs (this favours the old way)</li>
-      <li>Market labels use thresholds (crowd 2× or more = abundant, half or less = scarce). They only name a campaign, they never change it</li>
-      <li>"Never overspends" for Clearing is a property of splitting a fixed pool, not a simulation result</li></ul></div></div></section>`;
-}
-
 /* ---------- PAGE ---------- */
 function render(d) {
   DATA = d; EX.market = "all"; EX.outcome = "all"; EX.sort = "multiple"; EX.shown = 12;
   const out = $("#bm-out");
-  out.innerHTML = unbiasedBanner(d) + hero(d) +
+  out.innerHTML = hero(d) +
     section("See it", "Every campaign, at a glance", "", `${waffleCard(d)}<div class="bm-grid">${scatter(d)}${severity(d)}</div>`) +
     section("Why it happens", "What breaks a fixed ladder", "", `${marketCards(d)}<div class="bm-grid">${heatmap(d)}${leaderboard(d)}</div>`) +
     section("Who gets paid", "Fairness to creators", "", creators(d)) + trust(d) + scorecard(d) + explorer(d);
@@ -311,19 +290,15 @@ function render(d) {
   grow(out);
 }
 
-/* The server's total also counts the fixed-size confidence checks (other seeds, advertiser skill),
-   so split it: your campaigns first, then the extra check runs. */
-function setLoader(show, done = 0, total = 1, stage = "Starting", main = total) {
+/* Percentage only: the server's total includes the fixed-size confidence checks, so a raw run count
+   would read as more campaigns than the user asked for. */
+function setLoader(show, done = 0, total = 1, stage = "Starting") {
   $("#bm-loader").hidden = !show;
   if (!show) return;
   const p = clamp(done / total, 0, 1);
-  const n = (x) => x.toLocaleString("en-IN");
   $("#bm-fill").style.width = (p * 100).toFixed(1) + "%";
   $("#bm-pct").textContent = Math.round(p * 100) + "%";
   $("#bm-stage").textContent = stage;
-  $("#bm-count").textContent = total <= 1 ? "Warming up…"
-    : done <= main ? `${n(done)} of ${n(main)} simulated campaigns`
-    : `All ${n(main)} campaigns done · confidence checks: ${n(done - main)} of ${n(total - main)} extra runs`;
 }
 
 let RUN = 0, UNB = false;
@@ -332,7 +307,7 @@ async function go() {
   $("#bm-out").innerHTML = "";
   setLoader(true);
   const main = clamp(parseInt($("#bm-n").value, 10) || 400, 1, 1000);   // same clip as run_full
-  const q = new URLSearchParams({ seed: $("#bm-seed").value || 1, n: main, scenario: $("#bm-scn").value });
+  const q = new URLSearchParams({ seed: $("#bm-seed").value || 1, n: main, scenario: "all" });
   if (UNB) q.set("mode", "unbiased");
   try {
     const s = await fetch("/api/benchmark/start?" + q);
@@ -343,7 +318,7 @@ async function go() {
       if (me !== RUN) return;
       const p = await (await fetch("/api/benchmark/progress?id=" + id)).json();
       if (p.error) throw new Error(p.error);
-      setLoader(true, p.done, p.total, p.stage, main);
+      setLoader(true, p.done, p.total, p.stage);
       if (p.result) { setLoader(false); return render(p.result); }
     }
   } catch (e) {
@@ -352,13 +327,10 @@ async function go() {
   }
 }
 
-const LABELS = { all: "All five markets, mixed", smooth: "Everything moves smoothly", abundant: "Abundant: a crowd floods in", scarce: "Scarce: too few people arrive", viral_one: "One viral surge", viral_many: "Many viral surges" };
-$("#bm-scn").innerHTML = Object.entries(LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("#bm-form").onsubmit = (e) => { e.preventDefault(); go(); };
 $("#bm-unb").onclick = () => {
   UNB = !UNB;
   $("#bm-unb").setAttribute("aria-pressed", UNB);
-  $("#bm-scn").disabled = UNB;
   if (UNB) $("#bm-seed").value = 1 + Math.floor(Math.random() * 999999);   // a fresh seed, so no run is a favourite
   go();
 };

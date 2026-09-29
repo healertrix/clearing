@@ -159,6 +159,25 @@ function initHeroBg() {
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* Skeletons: grey placeholders shaped like the content on its way, in place of "Loading…" text. */
+const sk = (w = "100%", ht = 14, r = 8) => `<i class="skel" style="width:${w};height:${ht}px;border-radius:${r}px"></i>`;
+const times = (n, f) => Array.from({ length: n }, (_, i) => f(i)).join("");
+const SKEL = {
+  dash: () => `<div class="dash"><div class="skel-col">${sk("16%", 11)}${sk("72%", 38, 10)}</div>
+    <div class="tiles">${times(5, () => `<div class="panel tile">${sk("55%", 10)}${sk("70%", 30)}</div>`)}</div>
+    <div class="panel chart-panel skel-col">${sk("40%", 30, 99)}${sk("100%", 300, 12)}</div></div>`,
+  profiles: () => `<div class="wizard" style="max-width:1000px"><div class="q">${sk("90px", 11)}${sk("38%", 40, 10)}${sk("26%", 14)}
+    <div class="profile-grid">${times(6, () => `<div class="skel-card">${sk("88px", 88, 99)}${sk("55%", 18)}${sk("35%", 12)}${sk("80%", 40, 10)}</div>`)}</div></div></div>`,
+  camps: () => `<div class="wizard" style="max-width:1000px"><div class="q">${sk("200px", 11)}${sk("46%", 40, 10)}
+    <div class="camp-grid">${times(3, () => `<div class="skel-card">${sk("100%", 120, 14)}${sk("40%", 12)}${sk("60%", 24)}${sk("45%", 34)}${sk("80%", 36, 10)}${sk("100%", 44, 99)}</div>`)}</div></div></div>`,
+  goals: () => `<div class="wizard" style="max-width:820px"><div class="q" style="justify-items:center">${sk("88px", 88, 99)}${sk("180px", 11)}${sk("40%", 48, 10)}
+    <div class="skel-row">${times(3, () => `<div class="skel-card">${sk("40%", 11)}${sk("60%", 36)}${sk("30%", 12)}${sk("50%", 11)}${sk("70%", 36)}</div>`)}</div></div></div>`,
+  ladder: () => `<div class="skel-col">${sk("30%", 12)}${times(5, () => `<div class="skel-pair">${sk("100%", 36, 6)}${sk("100%", 36, 6)}</div>`)}</div>`,
+  compare: () => `<div class="skel-col">${sk("50%", 12)}${sk("60%", 32, 10)}<div class="cmp-scoregrid">${times(4, () => `<div class="cmp-tile">${sk("60%", 11)}${sk("45%", 26)}${sk("100%", 8, 4)}</div>`)}</div>${sk("100%", 220, 12)}</div>`,
+  doc: () => `<div class="skel-col" style="padding:8px 0">${sk("45%", 32, 10)}${times(3, (i) => `<div class="skel-col">${sk("100%")}${sk("96%")}${sk(i === 2 ? "58%" : "88%")}</div>`)}${sk("30%", 22)}${sk("100%")}${sk("72%")}</div>`,
+};
+const skeleton = (kind) => `<div class="skel-wrap" role="status" aria-busy="true" aria-label="Loading">${SKEL[kind]()}</div>`;
 const h = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -435,7 +454,7 @@ async function publish(scenario) {
   adv.scenario = scenario;
   const root = $("#adv");
   window.scrollTo({ top: 0, behavior: "smooth" });
-  root.replaceChildren(h(`<div class="loading">${scenario === "normal" ? "Publishing…" : "Replaying your campaign…"}</div>`));
+  root.replaceChildren(h(skeleton("dash")));
   try {
     const run = await api("/api/publish", { categories: [...adv.categories], formats: [...adv.formats], budget: adv.budget ?? adv.typical, max_cpm: adv.cpm, days: adv.days, seed: adv.seed, scenario });
     adv.last = run;
@@ -730,7 +749,7 @@ async function initCreator() { drawProfiles(); }
 
 async function drawProfiles() {
   const root = $("#cre");
-  root.replaceChildren(h(`<div class="loading">Finding creators…</div>`));
+  root.replaceChildren(h(skeleton("profiles")));
   const profiles = await api(`/api/creator/profiles?seed=${cre.seed}`);
   const node = h(`<div class="wizard" style="max-width:1000px"><div class="q"><span class="label">Creator</span><h2>Who are you?</h2><p class="hint">Pick a creator to play as.</p>
     <div class="profile-grid">${profiles.map((p, i) => `<button class="profile" data-i="${i}"><span class="avatar" style="background:${AV[i % AV.length]}"><img src="${avatarUrl(p)}" alt="" loading="lazy"></span><b class="handle">${esc(p.handle)}</b><span class="plat">${PLAT[p.platform]}</span>
@@ -745,6 +764,7 @@ async function drawProfiles() {
 async function pickProfile(p) {
   cre.profile = p;
   const root = $("#cre");
+  root.replaceChildren(h(skeleton("camps")));
   cre.cards = await api("/api/creator/campaigns", { creator_id: p.creator_id, seed: cre.seed });
   const node = h(`<div class="wizard" style="max-width:1000px"><div class="q"><span class="label">${esc(p.handle)} · ${vw(p.followers)} followers</span><h2>Campaigns you can join</h2>
     <div class="camp-grid">${cre.cards.map((c) => `<div class="camp">
@@ -763,7 +783,7 @@ async function pickProfile(p) {
 async function join(card) {
   cre.card = card;
   const root = $("#cre");
-  root.replaceChildren(h(`<div class="loading">Joining ${esc(card.brand)}…</div>`));
+  root.replaceChildren(h(skeleton("goals")));
   cre.run = await api("/api/creator/run", { creator_id: cre.profile.creator_id, card, seed: cre.seed });
   goals();
 }
@@ -1049,7 +1069,7 @@ async function oldWay(node) {
   const step = $("[data-oldstep]", node);
   step.hidden = false;
   if (!cmp.old) {
-    step.innerHTML = `<span class="label">The old way</span><div class="old-card old-loading"><p class="muted">Drawing up a starting ladder…</p></div>`;
+    step.innerHTML = `<span class="label">The old way</span><div class="old-card">${skeleton("ladder")}</div>`;
     let rungs;
     try { rungs = (await api(`/api/compare/random-ladder?budget=${cmp.budget}`)).rungs; }
     catch (_) { rungs = META.brief_ladder.map((r) => [...r]); }
@@ -1141,7 +1161,7 @@ function cmpTile(label, note, oldVal, newVal, big) {
 async function runCompare(node) {
   const out = $("[data-result]", node);
   out.hidden = false;
-  out.innerHTML = `<div class="loading">Running 300 simulated markets…</div>`;
+  out.innerHTML = skeleton("compare");
   out.scrollIntoView({ behavior: "smooth" });
   try {
     const r = await api("/api/compare", { budget: cmp.budget, old: { rungs: cmp.old.rungs }, fair_cpm: cmp.cpm });
@@ -1247,7 +1267,7 @@ function initMethod() {
 }
 async function showDoc(name) {
   const el = $("#doc");
-  el.innerHTML = `<p class="muted">Loading…</p>`;
+  el.innerHTML = skeleton("doc");
   try {
     const { markdown } = await api("/api/doc/" + name);
     el.innerHTML = window.marked ? marked.parse(markdown) : `<pre>${esc(markdown)}</pre>`;

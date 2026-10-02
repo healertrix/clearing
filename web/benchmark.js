@@ -170,7 +170,7 @@ function marketCards(d) {
       <div class="mrow"><span>Paid ÷ budget</span><b><em class="old-t">${times(v.old.total_spend / v.old.total_budget)}</em> → <em class="new-t">${times(v.new.total_spend / v.new.total_budget)}</em></b></div>
       <div class="mrow"><span>Paid ≤ true price</span><b><em class="old-t">${pct(atOrUnder(rows, "old"))}</em> → <em class="new-t">${pct(atOrUnder(rows, "new"))}</em></b></div></div>`;
   }).join("");
-  return card("Which markets break it", `Same campaigns, grouped by market${d.mode === "unbiased" ? " (named from what happened, not chosen)" : ""}. Green ring = never overspent.`,
+  return card("Which markets break it", `Same campaigns, grouped by market${d.mode === "entropy" ? " (named from what happened, not chosen)" : ""}. Green ring = never overspent.`,
     `<div class="mgrid">${cards}</div>${OLD_NEW}`,
     "A crowd or a viral surge breaks a fixed ladder — it pays per creator who crosses a rung, so more creators means more payouts, with no ceiling. Clearing has one: the budget.");
 }
@@ -213,13 +213,13 @@ function creators(d) {
 }
 
 function trust(d) {
-  const N = d.campaigns, W = 640, L = 84, R = 24, rowH = 32, rs = [{ name: "This run", old: { blown: d.totals.old.verdicts.blown / N }, new: { blown: d.totals.new.verdicts.blown / N } }, ...d.robust.map((r, i) => ({ name: `Seed ${i + 2}`, ...r }))];
+  const N = d.campaigns, W = 640, L = 150, R = 24, rowH = 32, rs = [{ name: `This run · ${N} campaigns`, old: { blown: d.totals.old.verdicts.blown / N }, new: { blown: d.totals.new.verdicts.blown / N } }, ...d.robust.map((r, i) => ({ name: `Other seed ${i + 1} · 100 campaigns`, ...r }))];
   const H = rs.length * rowH + 40, X = (v) => L + v * (W - L - R);
   const dumb = rs.map((r, i) => { const y = 28 + i * rowH; return `<text class="ax" x="${L - 12}" y="${y + 3}" text-anchor="end">${r.name}</text><line x1="${X(r.new.blown)}" x2="${X(r.old.blown)}" y1="${y}" y2="${y}" stroke="var(--line-2)" stroke-width="3"/>
     <circle cx="${X(r.old.blown)}" cy="${y}" r="7" fill="var(--old)"><title>Old way: ${pct(r.old.blown)} overspent</title></circle><text class="ax" x="${X(r.old.blown) + 12}" y="${y + 3}" style="fill:var(--old)">${pct(r.old.blown)}</text>
     <circle cx="${X(r.new.blown)}" cy="${y}" r="7" fill="var(--gold)"><title>Clearing: ${pct(r.new.blown)} overspent</title></circle>`; }).join("");
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((v) => `<line class="gl" x1="${X(v)}" x2="${X(v)}" y1="12" y2="${H - 22}"/><text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${pct(v)}</text>`).join("");
-  const seeds = card("Is this just one lucky run?", `Overspend rate: this run (${N} campaigns) and five other seeds (100 campaigns each).`,
+  const seeds = card("Is this just one lucky run?", "Overspend rate, this run and five other random ones.",
     `<svg class="chart" viewBox="0 0 ${W} ${H}">${ticks}${dumb}</svg>${OLD_NEW}`,
     `The old way overspent in ${pct(Math.min(...rs.map((r) => r.old.blown)))} to ${pct(Math.max(...rs.map((r) => r.old.blown)))} of campaigns across all six runs. Clearing overspent in none of them.`);
   const notes = { Perfect: "knows the exact price", Careful: "small errors", Typical: "this page's default", Careless: "big errors" };
@@ -278,11 +278,17 @@ function wireExplorer() {
   };
 }
 
+/* ---------- ENTROPY BADGE ---------- */
+function entropyBadge(d) {
+  if (d.mode !== "entropy") return "";
+  return `<div class="ent" title="${d.campaigns} campaigns, each with its own random world: true price, creator sizes, crowd, viral surges, spikes and the advertiser's skill are all drawn fresh. Markets are named only afterwards, from what happened."><i aria-hidden="true"></i><b>Randomised stress test</b><span>fresh seed · every input drawn at random</span></div>`;
+}
+
 /* ---------- PAGE ---------- */
 function render(d) {
   DATA = d; EX.market = "all"; EX.outcome = "all"; EX.sort = "multiple"; EX.shown = 12;
   const out = $("#bm-out");
-  out.innerHTML = hero(d) +
+  out.innerHTML = entropyBadge(d) + hero(d) +
     section("See it", "Every campaign, at a glance", "", `${waffleCard(d)}<div class="bm-grid">${scatter(d)}${severity(d)}</div>`) +
     section("Why it happens", "What breaks a fixed ladder", "", `${marketCards(d)}<div class="bm-grid">${heatmap(d)}${leaderboard(d)}</div>`) +
     section("Who gets paid", "Fairness to creators", "", creators(d)) + trust(d) + scorecard(d) + explorer(d);
@@ -290,8 +296,6 @@ function render(d) {
   grow(out);
 }
 
-/* Percentage only: the server's total includes the fixed-size confidence checks, so a raw run count
-   would read as more campaigns than the user asked for. */
 function setLoader(show, done = 0, total = 1, stage = "Starting") {
   $("#bm-loader").hidden = !show;
   if (!show) return;
@@ -299,19 +303,23 @@ function setLoader(show, done = 0, total = 1, stage = "Starting") {
   $("#bm-fill").style.width = (p * 100).toFixed(1) + "%";
   $("#bm-pct").textContent = Math.round(p * 100) + "%";
   $("#bm-stage").textContent = stage;
+  $("#bm-count").textContent = total > 1 ? `${done.toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")} simulated campaigns` : "Warming up…";
 }
 
-let RUN = 0, UNB = false;
+let RUN = 0, ENT = false;
 async function go() {
   const me = ++RUN;
   $("#bm-out").innerHTML = "";
   setLoader(true);
-  const main = clamp(parseInt($("#bm-n").value, 10) || 400, 1, 1000);   // same clip as run_full
-  const q = new URLSearchParams({ seed: $("#bm-seed").value || 1, n: main, scenario: "all" });
-  if (UNB) q.set("mode", "unbiased");
+  const q = new URLSearchParams({ seed: $("#bm-seed").value || 1, n: $("#bm-n").value || 400, scenario: $("#bm-scn").value });
+  if (ENT) q.set("mode", "entropy");
   try {
-    const s = await fetch("/api/benchmark/start?" + q);
-    if (!s.ok) throw new Error("This server doesn't have the benchmark route yet. Restart it with: python -m ladder serve");
+    const s = await (window.Loader ? Loader.fetch("/api/benchmark/start?" + q, {}, "Starting the benchmark") : fetch("/api/benchmark/start?" + q));
+    if (!s.ok) {
+      let msg = "";
+      try { msg = (await s.json()).error; } catch (_) { /* not JSON: an old server without this route */ }
+      throw new Error(msg || "This server doesn't have the benchmark route yet. Restart it with: python -m ladder serve");
+    }
     const { id } = await s.json();
     for (;;) {
       await new Promise((r) => setTimeout(r, 250));
@@ -327,11 +335,14 @@ async function go() {
   }
 }
 
+const LABELS = { all: "All five markets, mixed", smooth: "Everything moves smoothly", abundant: "Abundant: a crowd floods in", scarce: "Scarce: too few people arrive", viral_one: "One viral surge", viral_many: "Many viral surges" };
+$("#bm-scn").innerHTML = Object.entries(LABELS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("#bm-form").onsubmit = (e) => { e.preventDefault(); go(); };
-$("#bm-unb").onclick = () => {
-  UNB = !UNB;
-  $("#bm-unb").setAttribute("aria-pressed", UNB);
-  if (UNB) $("#bm-seed").value = 1 + Math.floor(Math.random() * 999999);   // a fresh seed, so no run is a favourite
+$("#bm-ent").onclick = () => {
+  ENT = !ENT;
+  $("#bm-ent").setAttribute("aria-pressed", ENT);
+  $("#bm-scn").disabled = ENT;
+  if (ENT) $("#bm-seed").value = 1 + Math.floor(Math.random() * 999999);   // a fresh seed, so no run is a favourite
   go();
 };
 $("#bm-rand").onclick = () => { $("#bm-seed").value = 1 + Math.floor(Math.random() * 999999); go(); };

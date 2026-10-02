@@ -28,8 +28,9 @@ python -m ladder publish --budget 25000 --days 14 --category gaming --format ree
 ## The web app
 
 - **Home:** the problem and the idea.
-- **Advertiser:** a budget and a fair price per view, then a campaign plays out and a results
-  report shows what happened.
+- **Advertiser:** a budget and a fair price per view, then a campaign plays out on the Benchmark
+  market and a results report shows what happened, with replays for too many creators, too few
+  views, a fraud wave and a viral last day.
 - **Creator:** pick a creator, join a campaign, watch a post climb its goals, get paid.
 - **Compare:** your own budget and rung table against Clearing, run through 300 simulated markets.
 - **Benchmark:** hundreds of simulated campaigns, old way vs Clearing, on their own synthetic
@@ -43,9 +44,9 @@ python -m ladder publish --budget 25000 --days 14 --category gaming --format ree
 | `ladder/engine.py` | rungs, price, pay, fraud check, Fair Reach, cold start, the old way |
 | `ladder/store.py` | running summary of settled campaigns (what the engine reads) |
 | `ladder/history.py` | replays history in date order, no look-ahead |
-| `ladder/simulate.py` | new campaigns for the advertiser and creator flows |
+| `ladder/simulate.py` | new campaigns for the creator flow |
 | `ladder/backtest.py`, `validate.py`, `report.py` | analysis and reports, against the generated world |
-| `ladder/benchmark.py` | Benchmark and Compare: a synthetic market, independent of the generated world |
+| `ladder/benchmark.py` | the synthetic market behind Benchmark, Compare and the Advertiser page (a gut-feel ladder vs Clearing on the same simulated crowd), independent of the generated world |
 | `ladder/server.py`, `web/` | the web app (standard-library server, plain JS) |
 | `data/` | the generated world: the brief's four tables as CSV, plus `world.json` |
 | `docs/` | the methodology and the one-pager, as PDF |

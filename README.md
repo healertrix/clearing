@@ -3,6 +3,8 @@
 Brands set a budget. Creators post. Every real view becomes a coin, and the market sets what a
 coin is worth. Never over budget, fair goals for every creator size, and no pay for bought views.
 
+**Live demo:** https://clearing-production-ce2d.up.railway.app/
+
 ## Run it
 
 ```bash
